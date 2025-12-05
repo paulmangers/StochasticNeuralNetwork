@@ -1,0 +1,24 @@
+.venv/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+project1_venv/
+
+# macOS system files
+.DS_Store
+
+# Jupyter / IPython
+.ipynb_checkpoints/
+
+# TensorFlow / ML temporary files
+*.h5
+*.ckpt
+*.tfrecord
+
+# Log / temp files
+*.log
+*.tmp

@@ -29,7 +29,7 @@ class SNNStepwiseSelector:
             return -2 * log_lik + m * np.log(n_total)
 
     def run_selection(self, datasets):
-        # Step 1: Forward Selection of input variables (Lags)
+       # --- Step 1: Forward Selection ---
         selected_lags = []
         best_overall_bic = np.inf
         
@@ -40,30 +40,33 @@ class SNNStepwiseSelector:
             
             for lag in remaining_lags:
                 current_lags = selected_lags + [lag]
-                # Test with J=1 initially as per common practice
                 model = StochasticNN(current_lags, J=1)
-                model.train_on_multiple(datasets, iterations=5)
-                trial_bics.append((self.get_bic(model, datasets), lag))
+                model.train_on_multiple(datasets, iterations=10) # Increased iterations
+                trial_bics.append((self.get_bic(model, datasets), lag, model))
             
             trial_bics.sort()
             if trial_bics[0][0] < best_overall_bic:
                 best_overall_bic = trial_bics[0][0]
                 selected_lags.append(trial_bics[0][1])
-                print(f"Added lag {trial_bics[0][1]}, BIC: {best_overall_bic}")
+                # IMPORTANT: Keep track of the actual model object
+                best_model = trial_bics[0][2] 
+                print(f"Added lag {trial_bics[0][1]}, BIC: {best_overall_bic:.2f}")
             else:
                 break
 
-        # Step 2: Selection of J
+        # --- Step 2: Selection of J ---
         print(f"Selecting J for lags {selected_lags}...")
-        best_model = None
-        for j in range(1, self.max_J + 1):
+        # We already have a best_model for J=1 from Step 1. 
+        # We only check if J > 1 improves it.
+        for j in range(2, self.max_J + 1):
             model = StochasticNN(selected_lags, J=j)
             model.train_on_multiple(datasets, iterations=20)
             current_bic = self.get_bic(model, datasets)
             if current_bic < best_overall_bic:
                 best_overall_bic = current_bic
                 best_model = model
-
+                print(f"Increased J to {j}, New BIC: {best_overall_bic:.2f}")
+                
         # Step 3: Backward Elimination (Pruning) as per Section 4.2.3
         print("Finalizing via Backward Elimination (Exact Implementation)...")
         current_model = best_model

@@ -13,13 +13,18 @@ class StochasticNN:
         self.p = len(p_indices)
         self.J = J
         
-        # Parameters
-        self.beta_0, self.b_0 = 0.0, np.zeros(self.p)
-        self.beta = np.zeros(J)
-        self.b = np.zeros((J, self.p))
-        self.alpha = np.zeros(J)
-        self.a = np.zeros((J, self.p))
-        self.sigma_sq = 1.0
+        # Initialize with small random values to break symmetry
+        # Standard deviation of 0.01 is enough to start the EM process
+        self.beta_0 = 0.0
+        self.b_0 = np.random.normal(0, 0.01, self.p)
+        
+        self.beta = np.random.normal(0, 0.01, J)
+        self.b = np.random.normal(0, 0.01, (J, self.p))
+        
+        self.alpha = np.random.normal(0, 0.01, J)
+        self.a = np.random.normal(0, 0.01, (J, self.p))
+        
+        self.sigma_sq = 1.0 # Initial variance estimate
 
     def logistic(self, z):
         return 1 / (1 + np.exp(-np.clip(z, -20, 20)))

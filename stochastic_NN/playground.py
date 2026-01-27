@@ -6,7 +6,7 @@ from time_series_generator import TimeSeriesGenerator
 from timeseries_processor import TimeSeriesProcessor
 from evaluator import SNNEvaluator
 
-# --- DEBUGGING WRAPPER ---
+
 def run_experiment(M=3, T=1.0, N=300, max_lags=3):
     print("Initializing Generators and Processors...")
     generator = TimeSeriesGenerator(T, N)

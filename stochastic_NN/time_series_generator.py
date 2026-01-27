@@ -22,7 +22,6 @@ class TimeSeriesGenerator:
     def generate_tar(self, z0, threshold=0.0, phi_high=0.9, phi_low=-0.5, sigma=0.1):
         """
         Threshold Autoregressive (TAR) Model.
-        Switches between two linear regimes based on the threshold.
         """
         z = np.zeros(self.N + 1)
         z[0] = z0

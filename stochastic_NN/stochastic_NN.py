@@ -6,14 +6,13 @@ import itertools
 class StochasticNN:
     def __init__(self, p_indices, J):
         """
-        p_indices: List of specific lag indices to use (e.g., [1, 2, 5])
+        p_indices: List of specific lag indices to use 
         J: Number of hidden units
         """
         self.p_indices = p_indices
         self.p = len(p_indices)
         self.J = J
-        
-        # Initialize with small random values to break symmetry
+
         self.beta_0 = 0.0
         self.b_0 = np.random.normal(0, 0.01, self.p)
         
@@ -60,16 +59,14 @@ class StochasticNN:
         W_total = np.vstack(all_weights)
         N = len(y_total)
         
-        # Build design matrix: [1, x_t, w_t1, w_t1*x_t, w_t2, w_t2*x_t, ...]
-        # This corresponds to: β₀ + b₀ᵀx_t + Σⱼ w_tj(βⱼ + bⱼᵀx_t)
-        X_design = [np.ones(N), X_total]  # Start with intercept and base lags
+        X_design_parts = [np.ones((N, 1)), X_total]  # Start with intercept and base lags
         
         for j in range(self.J):
             w_j = W_total[:, j:j+1]  # Shape (N, 1)
-            X_design.append(w_j)  # Intercept for unit j: w_tj * β_j
-            X_design.append(w_j * X_total)  # Lags for unit j: w_tj * b_j^T x_t
+            X_design_parts.append(w_j)  # Intercept for unit j: w_tj * β_j
+            X_design_parts.append(w_j * X_total)  # Lags for unit j: w_tj * b_j^T x_t
         
-        X_design = np.hstack(X_design)
+        X_design = np.hstack(X_design_parts)
         
         # Build parameter mask respecting frozen (pruned) parameters
         # Order: [β₀, b₀[0], ..., b₀[p-1], β₁, b₁[0], ..., b₁[p-1], β₂, ...]
@@ -216,10 +213,10 @@ class StochasticNN:
                 self.a[j][active_a_idx] = res.x[1:]
                 self.a[j][self.frozen_mask['a'][j]] = 0  # Ensure frozen stay zero
 
-            # 2. Update Regime (Linear) Parameters - CORRECTED
+            # 2. Update Regime (Linear) Parameters 
             self._update_linear_parameters(datasets, all_weights)
             
-            # 3. Update Noise Variance σ² - CORRECTED
+            # 3. Update Noise Variance 
             self._update_sigma_squared(datasets, all_weights, all_config_probs)
     
     def freeze_parameter(self, param_type, j=None, i=None):

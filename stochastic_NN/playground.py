@@ -15,7 +15,7 @@ def run_experiment(M=3, T=1.0, N=300, max_lags=3):
     experiments = [
         {
             "name": "TAR Process",
-            "func": lambda: generator.generate_tar(z0=0.1, threshold=0.0)
+            "func": lambda: generator.generate_tar(z0=0.4, threshold=0.0)
         },
         {
             "name": "Logistic Map",
@@ -23,7 +23,7 @@ def run_experiment(M=3, T=1.0, N=300, max_lags=3):
         },
         {
             "name": "Ito Process",
-            "func": lambda: generator.ito_process(z0=0.4, mufunc=lambda t, z: 0.5 * z, sigfunc=lambda t, z: 0.2 * z)
+            "func": lambda: generator.ito_process(z0=0.4, mufunc=lambda t, z: 0.05 * z, sigfunc=lambda t, z: 0.2 * z)
         }
 
     ]

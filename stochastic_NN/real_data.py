@@ -8,17 +8,14 @@ class RealDataExtractor:
         """
         self.ticker = ticker
 
-    def get_timeseries(self, start_date="2020-01-01", end_date="2026-01-01", use_returns=True):
-        print(f"Fetching data for {self.ticker}...")
+    def get_timeseries(self, start_date="2020-01-01", end_date="2025-01-01", use_returns=True):
         
-        # We add auto_adjust=True to merge 'Close' and 'Adj Close'
         data = yf.download(self.ticker, start=start_date, end=end_date, auto_adjust=True)
         
         if data.empty:
             raise ValueError(f"No data found for {self.ticker}.")
 
-        # Robust selection: take the 'Close' column
-        # Depending on yfinance version, this handles the MultiIndex issue
+        # Robust selection: take the 'Close' column, this handles the MultiIndex issue
         if 'Close' in data.columns:
             prices = data['Close'].values.flatten()
         else:

@@ -6,13 +6,14 @@ import itertools
 class StochasticNN:
     def __init__(self, p_indices, J):
         """
-        p_indices: List of specific lag indices to use 
+        p_indices: List of specific lag indices to use (e.g., [1, 2, 5])
         J: Number of hidden units
         """
         self.p_indices = p_indices
         self.p = len(p_indices)
         self.J = J
-
+        
+        # Initialize with small random values to break symmetry
         self.beta_0 = 0.0
         self.b_0 = np.random.normal(0, 0.01, self.p)
         
@@ -49,43 +50,46 @@ class StochasticNN:
 
     def _update_linear_parameters(self, datasets, all_weights):
         """
-        CORRECTED: Standard weighted least squares as per Section 4.1, Equation (16).
-        
-        Minimizes: E[Σ(y_t - β₀ - b₀ᵀx_t - Σⱼ w_tj(βⱼ + bⱼᵀx_t))² | data]
-        where w_tj = E[I_tj | y_t, x_t]
+        Standard weighted least squares as per Section 4.1, Equation (16).
+
         """
         X_total = np.vstack([self.get_X_subset(d[0]) for d in datasets])
         y_total = np.concatenate([d[1] for d in datasets])
         W_total = np.vstack(all_weights)
         N = len(y_total)
         
-        X_design_parts = [np.ones((N, 1)), X_total]  # Start with intercept and base lags
+        # Build design matrix
+        X_design_parts = [np.ones((N, 1)), X_total]  
         
         for j in range(self.J):
             w_j = W_total[:, j:j+1]  # Shape (N, 1)
-            X_design_parts.append(w_j)  # Intercept for unit j: w_tj * β_j
-            X_design_parts.append(w_j * X_total)  # Lags for unit j: w_tj * b_j^T x_t
+            X_design_parts.append(w_j)  
+            X_design_parts.append(w_j * X_total)  
         
         X_design = np.hstack(X_design_parts)
         
         # Build parameter mask respecting frozen (pruned) parameters
-        # Order: [β₀, b₀[0], ..., b₀[p-1], β₁, b₁[0], ..., b₁[p-1], β₂, ...]
-        active_mask = [True]  # β₀ is always active
+        active_mask = [True]  # beta_0 is always active
         active_mask.extend(~self.frozen_mask['b_0'])
         
         for j in range(self.J):
-            active_mask.append(True)  # β_j is always active
+            active_mask.append(True)  # beta_j is always active
             active_mask.extend(~self.frozen_mask['b'][j])
         
         active_mask = np.array(active_mask)
         active_indices = np.where(active_mask)[0]
         
-        # Solve reduced system: X_active^T X_active θ = X_active^T y
+        # Solve reduced system with L2 regularization for numerical stability
         X_active = X_design[:, active_indices]
         
+        # Adaptive ridge penalty 
+        ridge_lambda = 1e-6 * np.trace(X_active.T @ X_active) / len(active_indices)
+        
         try:
-            theta_reduced = np.linalg.solve(X_active.T @ X_active, X_active.T @ y_total)
+            regularized_gram = X_active.T @ X_active + ridge_lambda * np.eye(len(active_indices))
+            theta_reduced = np.linalg.solve(regularized_gram, X_active.T @ y_total)
         except np.linalg.LinAlgError:
+            # Fallback to lstsq if still singular
             theta_reduced = np.linalg.lstsq(X_active.T @ X_active, X_active.T @ y_total, rcond=None)[0]
         
         # Reconstruct full parameter vector
@@ -110,9 +114,8 @@ class StochasticNN:
 
     def _update_sigma_squared(self, datasets, all_weights, all_config_probs):
         """
-        CORRECTED: Uses conditional expectation as per Section 4.1, Equation (16).
+        Conditional expectation to update sigma as per Section 4.1, Equation (16).
         
-        σ² = (1/n) Σ_t E[(y_t - β₀ - b₀ᵀx_t - Σⱼ I_tj(βⱼ + bⱼᵀx_t))² | y_t, x_t]
         """
         total_sq = 0
         n_total = 0
@@ -131,7 +134,6 @@ class StochasticNN:
                     if config[j] == 1:
                         y_pred += (self.beta[j] + np.dot(X, self.b[j]))
                 
-                # Weight by P(I = config | y_t, x_t)
                 residuals_sq = (y - y_pred) ** 2
                 total_sq += np.sum(config_probs[:, idx] * residuals_sq)
             
@@ -141,14 +143,13 @@ class StochasticNN:
 
     def train_on_multiple(self, datasets, iterations=20):
         """
-        Iterative EM Algorithm as defined in Section 4.1.
-        Now correctly implements the M-step and respects frozen parameters.
+        Iterative EM Algorithm as defined in Section 4.1., respects frozen parameters.
         """
         for _ in range(iterations):
             all_weights = []
             all_config_probs = []
             
-            # --- E-STEP: Exact Calculation for J Stochastic Units ---
+            # E-STEP: Exact Calculation for J Stochastic Units
             for X_raw, y in datasets:
                 X = self.get_X_subset(X_raw)
                 N = X.shape[0]
@@ -186,16 +187,15 @@ class StochasticNN:
                     w[:, j] = np.sum(config_probs[:, rel_idx], axis=1)
                 all_weights.append(w)
 
-            # --- M-STEP: Maximization of Expected Complete Log-Likelihood ---
+            # M-STEP: Maximization of Expected Complete Log-Likelihood
             X_total = np.vstack([self.get_X_subset(d[0]) for d in datasets])
             W_total = np.vstack(all_weights)
             
-            # 1. Update Gating (Nonlinear) Parameters - Respecting Frozen Parameters
+            # Update Gating (Nonlinear) Parameters with L2 Regularization
             for j in range(self.J):
                 active_a_idx = np.where(~self.frozen_mask['a'][j])[0]
                 
                 if len(active_a_idx) == 0:
-                    # All parameters frozen, skip optimization
                     continue
                 
                 def log_loss(active_params):
@@ -204,19 +204,25 @@ class StochasticNN:
                     full_a[active_a_idx] = active_params[1:]
                     z = alpha + np.dot(X_total, full_a)
                     p = self.logistic(z)
-                    return -np.sum(W_total[:, j] * np.log(p + 1e-9) + 
-                                  (1 - W_total[:, j]) * np.log(1 - p + 1e-9))
+                    
+                    # Negative log-likelihood + L2 penalty
+                    nll = -np.sum(W_total[:, j] * np.log(p + 1e-9) + 
+                                 (1 - W_total[:, j]) * np.log(1 - p + 1e-9))
+                    penalty = 1e-4 * np.sum(active_params**2)
+                    
+                    return nll + penalty
                 
                 init_guess = np.concatenate(([self.alpha[j]], self.a[j][active_a_idx]))
                 res = minimize(log_loss, init_guess, method='BFGS')
+                
                 self.alpha[j] = res.x[0]
                 self.a[j][active_a_idx] = res.x[1:]
-                self.a[j][self.frozen_mask['a'][j]] = 0  # Ensure frozen stay zero
+                self.a[j][self.frozen_mask['a'][j]] = 0
 
-            # 2. Update Regime (Linear) Parameters 
+            # Update Regime (Linear) Parameters 
             self._update_linear_parameters(datasets, all_weights)
             
-            # 3. Update Noise Variance 
+            # Update Noise Variance 
             self._update_sigma_squared(datasets, all_weights, all_config_probs)
     
     def freeze_parameter(self, param_type, j=None, i=None):

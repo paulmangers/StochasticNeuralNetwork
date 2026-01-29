@@ -7,15 +7,26 @@ from timeseries_processor import TimeSeriesProcessor
 from evaluator import SNNEvaluator
 
 
-def run_experiment(M=3, T=1.0, N=300, max_lags=3):
-    print("Initializing Generators and Processors...")
+def run_experiment(M=10, T=1.0, N=500, max_lags=3):
+    '''
+    Runs a full experiment comparing SNN to Linear AR on various time series.
+    
+    M: Number of training paths 
+    T: Time horizon 
+    N: Number of time steps
+    max_lags: Maximum lags for model selection
+    '''
     generator = TimeSeriesGenerator(T, N)
     processor = TimeSeriesProcessor(max_lags)
-    
+
     experiments = [
         {
             "name": "TAR Process",
-            "func": lambda: generator.generate_tar(z0=0.4, threshold=0.0)
+            "func": lambda: generator.generate_tar(z0=0.1, threshold=0.0)
+        },      
+        {
+            "name": "3 Regime Market Model",
+            "func": lambda: generator.generate_bull_bear_sideways()
         },
         {
             "name": "Logistic Map",
@@ -29,42 +40,27 @@ def run_experiment(M=3, T=1.0, N=300, max_lags=3):
     ]
 
     for exp in experiments:
-        print(f"\n>>> Starting Experiment: {exp['name']}")
-        
-        # 1. Generate Data
-        print(f"Generating {M} paths...")
+        # Generate training data
         train_paths = [exp['func']() for _ in range(M)]
         train_datasets = [processor.create_dataset(p) for p in train_paths]
-        print("Data generation successful.")
-
-        # 2. Model Selection
-        print("Entering Stepwise Selector...")
-        selector = SNNStepwiseSelector(max_lags=max_lags, max_J=1) # Start small for debugging
-        
+        # Model Selection
+        selector = SNNStepwiseSelector(max_lags=max_lags, max_J=3)
         try:
             optimal_model = selector.run_selection(train_datasets)
-            print(f"Selection Complete. Optimal Lags: {optimal_model.p_indices}")
         except Exception as e:
             print(f"CRITICAL ERROR during selection: {e}")
             continue
 
-        # 3. Evaluation
-        print("Evaluating Performance...")
+        # Evaluation
         evaluator = SNNEvaluator(optimal_model, processor, experiment_name=exp['name'])
-        
+        # Generate test data
         test_path = exp['func']()
+
         results = evaluator.evaluate(train_paths[0], test_path)
         print(f"\n--- Statistical Comparison for {exp['name']} ---")
         print(f"Total Out-of-Sample Points: {len(test_path) - max_lags}")
-        print(f"Linear Benchmark Loss:      {results['Linear_Out_Sample_MSE']:.6f}")
-        print(f"SNN (Proposed) Loss:       {results['SNN_Out_Sample_MSE']:.6f}")
-        print(f"Reduction in Variance:     {results['Improvement_Pct']:.2f}%")
-        if results['Improvement_Pct'] > 0:
-            print("Conclusion: The Stochastic neurons successfully captured non-linearities.")
-        else:
-            print("Conclusion: Linear model is sufficient; SNN is overfitting.")
-        print(f"Experiment {exp['name']} Finished.")
-        print(f"Result: {results['Improvement_Pct']:.2f}% improvement.")
+        print(f"Benchmark Loss:      {results['Linear_Out_Sample_MSE']:.6f}")
+        print(f"SNN Loss:       {results['SNN_Out_Sample_MSE']:.6f}")
 
 if __name__ == "__main__":
     try:

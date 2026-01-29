@@ -27,12 +27,10 @@ class SNNStepwiseSelector:
         return -2 * log_lik + m * np.log(n_total)
 
     def run_selection(self, datasets):
-        # --- Step 1: Forward Selection ---
+        # Forward Selection
         selected_lags = []
         best_overall_bic = np.inf
         best_model = None
-        
-        print("Starting Forward Selection...")
         for _ in range(self.max_lags):
             trial_bics = []
             remaining_lags = [i for i in range(1, self.max_lags + 1) if i not in selected_lags]
@@ -57,15 +55,13 @@ class SNNStepwiseSelector:
                 break
 
         if best_model is None:
-            # Fallback: at least use lag 1
-            print("Forward selection found no lags, using lag 1 as default.")
+            # Fallback: use lag 1 if something went wrong
             selected_lags = [1]
             best_model = StochasticNN([1], J=1)
             best_model.train_on_multiple(datasets, iterations=15)
             best_overall_bic = self.get_bic(best_model, datasets)
 
-        # --- Step 2: Selection of J ---
-        print(f"Selecting J for lags {selected_lags}...")
+        # Selecting J
         for j in range(2, self.max_J + 1):
             model = StochasticNN(selected_lags, J=j)
             model.train_on_multiple(datasets, iterations=20)
@@ -78,21 +74,16 @@ class SNNStepwiseSelector:
                 print(f"J={j} did not improve BIC, keeping J={best_model.J}")
                 break
                 
-        # --- Step 3: Backward Elimination (CORRECTED) ---
-        print("Starting Backward Elimination...")
+        # Backward Elimination 
         current_model = best_model
         current_bic = self.get_bic(current_model, datasets)
-        
         improved = True
         elimination_round = 0
-        
         while improved:
             improved = False
             best_elimination = None
             best_elimination_bic = current_bic
             elimination_round += 1
-            
-            # Test eliminating each non-frozen parameter
             candidates = []
             
             # 1. Test eliminating b_0[i] parameters
@@ -116,8 +107,6 @@ class SNNStepwiseSelector:
                 print("No more parameters to eliminate.")
                 break
             
-            print(f"Round {elimination_round}: Testing {len(candidates)} candidate eliminations...")
-            
             for param_type, j, i in candidates:
                 # Create trial model with parameter frozen
                 trial_model = copy.deepcopy(current_model)
@@ -137,17 +126,8 @@ class SNNStepwiseSelector:
                 current_model = best_elimination[0]
                 current_bic = best_elimination_bic
                 param_type, j, i = best_elimination[1:]
-                
-                if param_type == 'b_0':
-                    print(f"Eliminated b_0[{i}] (lag {current_model.p_indices[i]}). New BIC: {current_bic:.2f}")
-                elif param_type == 'b':
-                    print(f"Eliminated b[{j}, {i}] (hidden unit {j}, lag {current_model.p_indices[i]}). New BIC: {current_bic:.2f}")
-                else:  # 'a'
-                    print(f"Eliminated a[{j}, {i}] (gating unit {j}, lag {current_model.p_indices[i]}). New BIC: {current_bic:.2f}")
-            else:
-                print("No beneficial elimination found. Backward elimination complete.")
 
-        print(f"\nFinal model: {current_model.J} hidden units, lags {current_model.p_indices}")
+        print(f"\nFinal model: {current_model.J} hidden units, {current_model.p_indices} lags")
         print(f"Final BIC: {current_bic:.2f}")
         
         return current_model

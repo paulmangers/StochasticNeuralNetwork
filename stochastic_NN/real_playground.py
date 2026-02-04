@@ -8,8 +8,8 @@ import numpy as np
 extractor = RealDataExtractor('^GSPC')
 returns = extractor.get_timeseries(start_date="2018-01-01", end_date="2025-01-28")
 
-# Compute volatility (absolute returns)
-volatility = np.abs(returns) * 100  # Scale to percentage
+# Compute log(absolute returns)
+volatility = np.log(np.abs(returns)*100 + 1e-8) 
 
 # Split data
 train_data, test_data = extractor.split_train_test(volatility, train_ratio=0.8)

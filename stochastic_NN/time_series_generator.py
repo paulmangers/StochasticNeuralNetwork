@@ -157,18 +157,16 @@ class TimeSeriesGenerator:
             x = y[t-1]
             
             # Generate from transition density p(y|x) using inverse transform sampling
-            # Total probability mass: F(1|x) = e^(1-x)
-            u = np.random.uniform(0, np.exp(1-x))
+            u = np.random.uniform(0, 1)
             
             # Inverse CDF
             if u <= x * np.exp(1-x):
                 y[t] = u / np.exp(1-x)
             else:
-                # Easy way: Accept-reject method
+                max_density = np.exp(1-x) - 1 
                 while True:
                     y_candidate = np.random.uniform(x, 1)
                     density = np.exp(1-x) - np.exp(y_candidate - x)
-                    max_density = np.exp(1-x)
                     
                     if np.random.uniform(0, max_density) <= density:
                         y[t] = y_candidate
@@ -176,50 +174,6 @@ class TimeSeriesGenerator:
         
         return y[burn_in:]
     
-    def generate_example_6_3(self, n=2000, sigma=0.5, burn_in=1000):
-        """
-        Example 6.3: Distorted Long-Memory Autoregressive Model (Equation 22)
-  
-        Parameters:
-            n: Number of observations to return
-            sigma: Standard deviation of the innovations (paper uses 0.5)
-            burn_in: Number of initial observations to discard
-        
-        Returns:
-            Dictionary with keys:
-                'y': The observed y_t series (length n)
-                'x': The latent x_t series (length n)
-        """
-        total_n = burn_in + n
-        
-        # Initialize from stationary distribution
-        stationary_variance = sigma**2 / (1 - 0.99**2)
-        x = np.zeros(total_n)
-        x[0] = np.random.normal(0, np.sqrt(stationary_variance))
-        
-        # Generate x_t process (AR(1) with phi=0.99)
-        for t in range(1, total_n):
-            eps = np.random.normal(0, sigma)
-            x[t] = 0.99 * x[t-1] + eps
-        
-        # Generate y_t from x_t
-        y = np.zeros(total_n)
-        for t in range(1, total_n):
-            y[t] = x[t-1]**2 * x[t]
-        
-        # Return after burn-in
-        return {
-            'y': y[burn_in:],
-            'x': x[burn_in:]
-        }
-    
-    def generate_example_6_3_y_only(self, n=2000, sigma=0.5, burn_in=1000):
-        """
-        Example 6.3: Returns only the observable y_t series.
-        
-        Use this when simulating the scenario where x_t is unobservable.
-        """
-        result = self.generate_example_6_3(n=n, sigma=sigma, burn_in=burn_in)
-        return result['y']
+
 
 

@@ -26,8 +26,8 @@ class RealDataExtractor:
         prices = prices[~np.isnan(prices)]
 
         if use_returns:
-            # Log-returns: log(P_t) - log(P_{t-1})
-            returns = np.diff(np.log(prices))
+            # returns: P_t - P_{t-1}
+            returns = np.diff(prices)
             return returns
         
         return prices
